@@ -416,8 +416,10 @@ face_recognition_system/
 
 ## 📬 联系方式
 
-- 项目地址：https://github.com/example/ddfd-face-rec
-- 问题反馈：https://github.com/example/ddfd-face-rec/issues
+- **GitHub 仓库**: https://github.com/yangfanconan/face_recognition_system
+- **问题反馈**: https://github.com/yangfanconan/face_recognition_system/issues
+- **项目讨论**: 欢迎在 GitHub Issues 中提问或讨论
+- **代码贡献**: 欢迎提交 Pull Request
 
 ---
 
