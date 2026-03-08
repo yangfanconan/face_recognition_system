@@ -289,22 +289,24 @@ class Detector:
     ) -> List[Dict]:
         """
         人脸检测
-        
+
         Args:
             image: (H, W, C) BGR 图像
             min_face_size: 最小人脸尺寸
             max_faces: 最大检测数量
-            
+
         Returns:
             detections: 检测结果列表
         """
         # 预处理
         tensor, meta = self.preprocess(image)
         tensor = tensor.to(self.device)
-        
-        # 推理
+
+        # 推理 - 使用 model 的完整 forward（返回检测结果）
         if self.mode == "pytorch":
-            outputs = self.model(tensor)
+            # DKGA_Det 在 eval 模式下返回检测结果列表
+            detections = self.model(tensor)
+            return detections[0] if len(detections) > 0 else []
         elif self.mode == "onnx":
             outputs = self.session.run(None, {self.input_name: tensor.cpu().numpy()})
             # 解析 ONNX 输出

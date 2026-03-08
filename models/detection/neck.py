@@ -127,6 +127,9 @@ class BiFPNBlock(nn.Module):
     BiFPN 双向特征金字塔
     
     Reference: EfficientDet (https://arxiv.org/abs/1911.09070)
+    
+    注意：第一层接收多尺度输入，输出统一通道数
+    后续层接收统一通道数输入，输出统一通道数
     """
     
     def __init__(
@@ -134,16 +137,26 @@ class BiFPNBlock(nn.Module):
         in_channels: List[int],
         out_channels: int = 256,
         num_levels: int = 4,
-        attention_type: str = "se"
+        attention_type: str = "se",
+        is_first_layer: bool = False
     ):
         super().__init__()
         
         self.num_levels = num_levels
+        self.is_first_layer = is_first_layer
+        self.out_channels = out_channels
         
         # 横向连接
+        # 第一层：使用原始 in_channels
+        # 后续层：所有输入都是 out_channels
+        if is_first_layer:
+            lateral_in_channels = in_channels[:num_levels]
+        else:
+            lateral_in_channels = [out_channels] * num_levels
+        
         self.lateral_convs = nn.ModuleList([
             nn.Conv2d(in_ch, out_channels, 1, bias=False)
-            for in_ch in in_channels[:num_levels]
+            for in_ch in lateral_in_channels
         ])
         
         # 自顶向下路径
@@ -250,16 +263,17 @@ class BiFPNLite(nn.Module):
             self.bifpn_in_channels = in_channels
             self.num_levels = len(in_channels)
 
-        # BiFPN 层
-        self.bifpn_layers = nn.ModuleList([
-            BiFPNBlock(
+        # BiFPN 层 - 第一层使用原始通道，后续层使用统一通道
+        self.bifpn_layers = nn.ModuleList()
+        for i in range(num_layers):
+            bifpn = BiFPNBlock(
                 in_channels=self.bifpn_in_channels,
                 out_channels=out_channels,
                 num_levels=self.num_levels,
-                attention_type="se" if attention else None
+                attention_type="se" if attention else None,
+                is_first_layer=(i == 0)  # 只有第一层使用原始通道
             )
-            for _ in range(num_layers)
-        ])
+            self.bifpn_layers.append(bifpn)
 
         # 输出卷积
         self.out_convs = nn.ModuleList([

@@ -41,8 +41,8 @@ from .dcnv2 import (
     make_divisible,
 )
 
-# 注意：ConvBNAct 在 detection/backbone.py 中也有定义，不要从这里导入
-# from .backbone_utils import ConvBNAct
+# ConvBNAct 从 backbone_utils 导入，供 recognition 等模块使用
+from .backbone_utils import ConvBNAct
 
 from .attention import (
     SEBlock,
@@ -93,7 +93,8 @@ __all__ = [
     "DeformableKeypointConv",
     "deformable_conv2d_native",
     "make_divisible",
-    # backbone_utils - ConvBNAct 在 detection/backbone.py 中定义
+    # backbone_utils
+    "ConvBNAct",
     # attention
     "SEBlock",
     "CBAM",
