@@ -223,10 +223,10 @@ class BiFPNBlock(nn.Module):
 class BiFPNLite(nn.Module):
     """
     BiFPN-Lite 简化版
-    
+
     减少层数和通道数，平衡精度和速度
     """
-    
+
     def __init__(
         self,
         in_channels: List[int] = [256, 512, 1024],
@@ -236,29 +236,35 @@ class BiFPNLite(nn.Module):
         attention: bool = True
     ):
         super().__init__()
-        
+
         self.use_p2 = use_p2
-        
+        self.out_channels = out_channels
+
         # P2 层上采样
         if use_p2:
             self.p2_conv = nn.Conv2d(in_channels[0], out_channels, 1, bias=False)
-            in_channels = [out_channels] + in_channels  # 添加 P2
-        
+            # P2 输出 out_channels, 所以 P2 通道也是 out_channels
+            self.bifpn_in_channels = [out_channels] + in_channels  # [256, 256, 512, 1024]
+            self.num_levels = len(self.bifpn_in_channels)
+        else:
+            self.bifpn_in_channels = in_channels
+            self.num_levels = len(in_channels)
+
         # BiFPN 层
         self.bifpn_layers = nn.ModuleList([
             BiFPNBlock(
-                in_channels=in_channels,
+                in_channels=self.bifpn_in_channels,
                 out_channels=out_channels,
-                num_levels=len(in_channels),
+                num_levels=self.num_levels,
                 attention_type="se" if attention else None
             )
             for _ in range(num_layers)
         ])
-        
+
         # 输出卷积
         self.out_convs = nn.ModuleList([
             ConvBNAct(out_channels, out_channels, 3, 1, 1)
-            for _ in range(len(in_channels))
+            for _ in range(self.num_levels)
         ])
     
     def forward(self, features: Tuple[torch.Tensor, ...]) -> Tuple[torch.Tensor, ...]:

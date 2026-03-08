@@ -18,7 +18,7 @@ from models.common import DeformConv2d, make_divisible
 
 class ConvBNAct(nn.Module):
     """Conv + BN + Activation"""
-    
+
     def __init__(
         self,
         in_channels: int,
@@ -28,10 +28,11 @@ class ConvBNAct(nn.Module):
         padding: int = 1,
         groups: int = 1,
         activation: str = "SiLU",
-        use_dcn: bool = False
+        use_dcn: bool = False,
+        use_gn: bool = False
     ):
         super().__init__()
-        
+
         if use_dcn:
             self.conv = DeformConv2d(
                 in_channels, out_channels, kernel_size, stride, padding,
@@ -42,9 +43,12 @@ class ConvBNAct(nn.Module):
                 in_channels, out_channels, kernel_size, stride, padding,
                 groups=groups, bias=False
             )
-        
-        self.bn = nn.BatchNorm2d(out_channels)
-        
+
+        if use_gn:
+            self.bn = nn.GroupNorm(32, out_channels)
+        else:
+            self.bn = nn.BatchNorm2d(out_channels)
+
         if activation == "ReLU":
             self.act = nn.ReLU(inplace=True)
         elif activation == "SiLU":
@@ -55,7 +59,7 @@ class ConvBNAct(nn.Module):
             self.act = nn.GELU()
         else:
             self.act = nn.Identity()
-    
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.act(self.bn(self.conv(x)))
 
@@ -317,21 +321,23 @@ class CSPDarknet(nn.Module):
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, ...]:
         """
         前向传播
-        
+
         Returns:
             features: 多尺度特征图 (P3, P4, P5)
         """
         # Stem
-        x = self.stem(x)
-        
+        x = self.stem(x)  # x shape: (B, 128, H/4, W/4)
+
         # Stages
         features = []
         for i, stage in enumerate(self.stages):
             x = stage(x)
             # 输出 P3, P4, P5 (对应 stage 1, 2, 3)
-            if i >= 1:  # 从 stage1 开始输出
-                features.append(self.dropout(x))
-        
+            # Stage 0 输出 256 通道 (P3)
+            # Stage 1 输出 512 通道 (P4)
+            # Stage 2 输出 1024 通道 (P5)
+            features.append(self.dropout(x))
+
         return tuple(features)  # (P3, P4, P5)
 
 

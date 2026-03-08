@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import List, Dict, Tuple, Optional
 
-from models.common.backbone_utils import ConvBNAct
+from models.detection.backbone import ConvBNAct
 
 
 # ============================================
