@@ -287,21 +287,27 @@ class CSPDarknet(nn.Module):
         
         # Stages
         self.stages = nn.ModuleList()
-        
+
         for i in range(self.num_stages):
-            in_ch = channels[i]
-            out_ch = channels[i + 1]
-            depth = depths[i]
+            # Stage0 输入是 Stem 输出 (channels[1]=128)
+            # Stage1+ 输入是前一 Stage 输出 (channels[i+1])
+            if i == 0:
+                in_ch = channels[1]  # 128
+            else:
+                in_ch = channels[i + 1]  # 256, 512
             
+            out_ch = channels[i + 2] if i < len(depths) - 1 else channels[-1]
+            depth = depths[i]
+
             # 下采样
             downsample = ConvBNAct(in_ch, out_ch, 3, 2, 1, activation=activation)
-            
+
             # CSP Block
             if use_dcnv2 and i in dcnv2_stages:
                 stage_block = DCNCSPBlock(out_ch, out_ch, num_bottlenecks=depth, expansion=0.5, activation=activation)
             else:
                 stage_block = BottleneckCSP(out_ch, out_ch, num_bottlenecks=depth, expansion=0.5, activation=activation)
-            
+
             self.stages.append(nn.Sequential(downsample, stage_block))
         
         # Dropout
@@ -323,20 +329,18 @@ class CSPDarknet(nn.Module):
         前向传播
 
         Returns:
-            features: 多尺度特征图 (P3, P4, P5)
+            features: 多尺度特征图 (P3, P4, P5) - 只输出 3 个
         """
         # Stem
         x = self.stem(x)  # x shape: (B, 128, H/4, W/4)
 
-        # Stages
+        # Stages - 只输出 P3, P4, P5 (前 3 个 stages)
         features = []
         for i, stage in enumerate(self.stages):
             x = stage(x)
-            # 输出 P3, P4, P5 (对应 stage 1, 2, 3)
-            # Stage 0 输出 256 通道 (P3)
-            # Stage 1 输出 512 通道 (P4)
-            # Stage 2 输出 1024 通道 (P5)
-            features.append(self.dropout(x))
+            # 只输出前 3 个 stages (P3, P4, P5)
+            if i < 3:
+                features.append(self.dropout(x))
 
         return tuple(features)  # (P3, P4, P5)
 
