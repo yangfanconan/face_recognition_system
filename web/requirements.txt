@@ -1,0 +1,4 @@
+# DDFD-FaceRec Web 演示依赖
+
+gradio>=4.0.0
+Pillow>=10.0.0

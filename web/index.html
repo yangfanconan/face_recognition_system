@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DDFD-FaceRec - 人脸识别演示系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            color: white;
+            padding: 30px 0;
+            margin-bottom: 30px;
+        }
+        
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .status-bar {
+            background: rgba(255,255,255,0.95);
+            border-radius: 10px;
+            padding: 15px 25px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #4ade80;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .tab-btn {
+            padding: 12px 24px;
+            background: rgba(255,255,255,0.2);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+        
+        .tab-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .tab-btn.active {
+            background: white;
+            color: #667eea;
+            border-color: white;
+        }
+        
+        .tab-content {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+        
+        .upload-area:hover {
+            background: #f5f3ff;
+            border-color: #764ba2;
+        }
+        
+        .upload-area.dragover {
+            background: #ede9fe;
+            border-color: #764ba2;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .result-box {
+            background: #f9fafb;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .result-box h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+        
+        .info-text {
+            font-family: 'Courier New', monospace;
+            background: #1f2937;
+            color: #4ade80;
+            padding: 15px;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+        
+        .image-preview {
+            max-width: 100%;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            opacity: 0.9;
+            font-size: 0.9em;
+        }
+        
+        footer {
+            text-align: center;
+            color: white;
+            margin-top: 40px;
+            padding: 20px;
+            opacity: 0.9;
+        }
+        
+        footer a {
+            color: white;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 DDFD-FaceRec</h1>
+            <p>Dual-Domain Feature Decoupling Face Recognition System</p>
+            <p>端到端人脸识别全系统 - 双分支特征解耦方案</p>
+        </header>
+        
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-dot"></div>
+                <span>系统运行正常</span>
+            </div>
+            <div class="status-item">
+                <span>📊 模型版本：v1.0-beta</span>
+            </div>
+            <div class="status-item">
+                <span>🖥️ 设备：<span id="device-info">加载中...</span></span>
+            </div>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab-btn active" onclick="showTab('detection')">📷 人脸检测</button>
+            <button class="tab-btn" onclick="showTab('feature')">🔍 特征提取</button>
+            <button class="tab-btn" onclick="showTab('verify')">👥 1:1 验证</button>
+            <button class="tab-btn" onclick="showTab('search')">🔎 1:N 搜索</button>
+            <button class="tab-btn" onclick="showTab('database')">📋 人脸库</button>
+        </div>
+        
+        <!-- 人脸检测 -->
+        <div id="detection" class="tab-content active">
+            <h2>人脸检测</h2>
+            <p style="margin-bottom: 20px; color: #666;">上传图像，自动检测其中的人脸位置</p>
+            
+            <div class="upload-area" onclick="document.getElementById('detect-input').click()">
+                <p>📁 点击上传图像</p>
+                <p style="color: #999; font-size: 0.9em;">支持 JPG, PNG 格式</p>
+                <input type="file" id="detect-input" accept="image/*" style="display: none;" onchange="handleImageUpload(this, 'detect-preview')">
+            </div>
+            
+            <div id="detect-result" class="result-box" style="display: none;">
+                <h3>检测结果</h3>
+                <img id="detect-preview" class="image-preview" style="display: none;">
+                <pre id="detect-info" class="info-text"></pre>
+            </div>
+            
+            <button class="btn" onclick="runDetection()" style="margin-top: 15px;">开始检测</button>
+        </div>
+        
+        <!-- 特征提取 -->
+        <div id="feature" class="tab-content">
+            <h2>特征提取</h2>
+            <p style="margin-bottom: 20px; color: #666;">提取人脸的 512 维特征向量</p>
+            
+            <div class="upload-area" onclick="document.getElementById('feature-input').click()">
+                <p>📁 点击上传图像</p>
+                <input type="file" id="feature-input" accept="image/*" style="display: none;" onchange="handleImageUpload(this, 'feature-preview')">
+            </div>
+            
+            <div id="feature-result" class="result-box" style="display: none;">
+                <h3>特征信息</h3>
+                <img id="feature-preview" class="image-preview" style="display: none;">
+                <pre id="feature-info" class="info-text"></pre>
+            </div>
+            
+            <button class="btn" onclick="runExtraction()" style="margin-top: 15px;">提取特征</button>
+        </div>
+        
+        <!-- 1:1 验证 -->
+        <div id="verify" class="tab-content">
+            <h2>1:1 人脸验证</h2>
+            <p style="margin-bottom: 20px; color: #666;">验证两张图像是否为同一人</p>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="upload-area" onclick="document.getElementById('verify-input1').click()">
+                    <p>📁 上传图像 1</p>
+                    <input type="file" id="verify-input1" accept="image/*" style="display: none;">
+                </div>
+                <div class="upload-area" onclick="document.getElementById('verify-input2').click()">
+                    <p>📁 上传图像 2</p>
+                    <input type="file" id="verify-input2" accept="image/*" style="display: none;">
+                </div>
+            </div>
+            
+            <div id="verify-result" class="result-box" style="display: none;">
+                <h3>验证结果</h3>
+                <pre id="verify-info" class="info-text"></pre>
+            </div>
+            
+            <button class="btn" onclick="runVerification()" style="margin-top: 15px;">开始验证</button>
+        </div>
+        
+        <!-- 1:N 搜索 -->
+        <div id="search" class="tab-content">
+            <h2>1:N 人脸搜索</h2>
+            <p style="margin-bottom: 20px; color: #666;">在人脸库中搜索相似人脸</p>
+            
+            <div class="upload-area" onclick="document.getElementById('search-input').click()">
+                <p>📁 上传查询图像</p>
+                <input type="file" id="search-input" accept="image/*" style="display: none;">
+            </div>
+            
+            <div id="search-result" class="result-box" style="display: none;">
+                <h3>搜索结果</h3>
+                <pre id="search-info" class="info-text"></pre>
+            </div>
+            
+            <button class="btn" onclick="runSearch()" style="margin-top: 15px;">开始搜索</button>
+        </div>
+        
+        <!-- 人脸库 -->
+        <div id="database" class="tab-content">
+            <h2>人脸库管理</h2>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="db-count">0</div>
+                    <div class="stat-label">已注册人脸</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="db-searches">0</div>
+                    <div class="stat-label">搜索次数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="db-verifications">0</div>
+                    <div class="stat-label">验证次数</div>
+                </div>
+            </div>
+            
+            <div class="result-box">
+                <h3>数据库信息</h3>
+                <pre id="db-info" class="info-text">数据库为空</pre>
+            </div>
+            
+            <button class="btn" onclick="refreshDbInfo()" style="margin-top: 15px;">刷新信息</button>
+            <button class="btn" onclick="clearDb()" style="margin-top: 15px; background: #ef4444;">清空数据库</button>
+        </div>
+        
+        <footer>
+            <p><strong>DDFD-FaceRec</strong> v1.0-beta</p>
+            <p>GitHub: <a href="https://github.com/yangfanconan/face_recognition_system" target="_blank">yangfanconan/face_recognition_system</a></p>
+            <p style="margin-top: 10px;">© 2026 人脸识别系统 - 仅供研究使用</p>
+        </footer>
+    </div>
+    
+    <script>
+        // 标签页切换
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            document.getElementById(tabId).classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        // 图像处理
+        function handleImageUpload(input, previewId) {
+            const file = input.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = document.getElementById(previewId);
+                    img.src = e.target.result;
+                    img.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+        
+        // 模拟功能（实际使用时需要连接后端 API）
+        function runDetection() {
+            alert('检测功能需要连接后端 API。\n\n请启动后端服务：\npython web/app.py');
+        }
+        
+        function runExtraction() {
+            alert('特征提取功能需要连接后端 API。\n\n请启动后端服务：\npython web/app.py');
+        }
+        
+        function runVerification() {
+            alert('验证功能需要连接后端 API。\n\n请启动后端服务：\npython web/app.py');
+        }
+        
+        function runSearch() {
+            alert('搜索功能需要连接后端 API。\n\n请启动后端服务：\npython web/app.py');
+        }
+        
+        function refreshDbInfo() {
+            document.getElementById('db-info').textContent = '数据库信息需要从后端获取';
+            document.getElementById('db-count').textContent = '0';
+        }
+        
+        function clearDb() {
+            if (confirm('确定要清空数据库吗？')) {
+                alert('清空功能需要连接后端 API');
+            }
+        }
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 检测设备信息
+            fetch('/api/device')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('device-info').textContent = data.device || '未知';
+                })
+                .catch(() => {
+                    document.getElementById('device-info').textContent = '后端未连接';
+                });
+        });
+    </script>
+</body>
+</html>
