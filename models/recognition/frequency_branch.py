@@ -120,16 +120,18 @@ class FrequencyConvBlock(nn.Module):
         activation: str = "ReLU"
     ):
         super().__init__()
-        
+
         # 频域卷积 (使用标准卷积近似)
+        # stride 只在 conv1 上使用
         self.conv1 = nn.Conv2d(
             in_channels, out_channels, kernel_size, stride, padding,
             groups=groups, bias=False
         )
         self.bn1 = nn.BatchNorm2d(out_channels)
-        
+
+        # conv2 不使用 stride
         self.conv2 = nn.Conv2d(
-            out_channels, out_channels, kernel_size, stride, padding,
+            out_channels, out_channels, kernel_size, 1, padding,
             groups=groups, bias=False
         )
         self.bn2 = nn.BatchNorm2d(out_channels)
@@ -249,20 +251,20 @@ class FrequencyBranch(nn.Module):
         activation: str = "ReLU"
     ) -> nn.Sequential:
         layers = []
-        
+
         # 第一个 block 带下采样
         layers.append(FrequencyConvBlock(
             in_channels, out_channels, stride=stride,
             use_se=use_se, activation=activation
         ))
-        
-        # 后续 blocks
+
+        # 后续 blocks - in_channels 应该是 out_channels
         for _ in range(1, num_blocks):
             layers.append(FrequencyConvBlock(
                 out_channels, out_channels, stride=1,
                 use_se=use_se, activation=activation
             ))
-        
+
         return nn.Sequential(*layers)
     
     def _init_weights(self) -> None:

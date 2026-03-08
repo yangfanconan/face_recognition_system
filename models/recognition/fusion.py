@@ -29,24 +29,26 @@ class FrequencyGatedFusion(nn.Module):
     def __init__(
         self,
         channels: int,
+        freq_channels: Optional[int] = None,
         reduction: int = 4,
         gate_type: str = "sigmoid"
     ):
         super().__init__()
-        
+
         self.channels = channels
         self.gate_type = gate_type
-        
+        freq_channels = freq_channels or channels
+
         # 空域特征处理
         self.spatial_proj = nn.Sequential(
             nn.Conv2d(channels, channels, 1, bias=False),
             nn.BatchNorm2d(channels),
             nn.ReLU(inplace=True)
         )
-        
-        # 频域特征处理
+
+        # 频域特征处理 - 支持不同的输入通道数
         self.freq_proj = nn.Sequential(
-            nn.Conv2d(channels, channels, 1, bias=False),
+            nn.Conv2d(freq_channels, channels, 1, bias=False),
             nn.BatchNorm2d(channels),
             nn.ReLU(inplace=True)
         )

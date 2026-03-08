@@ -82,18 +82,19 @@ class DDFD_Rec(nn.Module):
             }
         self.frequency_branch = build_frequency_branch(**frequency_kwargs)
         
-        # 融合模块
+        # 融合模块 - 添加投影层匹配通道数
         if fusion_kwargs is None:
             fusion_kwargs = {
-                'channels': 256,
+                'channels': 512,  # 匹配空域分支输出
+                'freq_channels': 256,  # 频域分支输出
                 'reduction': 4,
             }
         self.fusion = FrequencyGatedFusion(**fusion_kwargs)
         
-        # Transformer 编码器
+        # Transformer 编码器 - dim 匹配 fusion 输出
         if transformer_kwargs is None:
             transformer_kwargs = {
-                'dim': 256,
+                'dim': 512,  # 匹配 fusion 输出
                 'depth': 4,
                 'num_heads': 8,
                 'mlp_ratio': 4.0,
