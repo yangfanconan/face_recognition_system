@@ -88,16 +88,22 @@ class FaceRecognitionPipeline:
         # 质量过滤
         valid_faces = []
         for det in detections:
+            # 类型检查，确保 det 是字典
+            if not isinstance(det, dict):
+                continue
+                
             # 置信度过滤
             if det.get('score', 0) < 0.6:
                 continue
-            
+
             # 尺寸过滤
-            bbox = det['bbox']
+            bbox = det.get('bbox')
+            if bbox is None:
+                continue
             face_size = min(bbox[2] - bbox[0], bbox[3] - bbox[1])
             if face_size < min_face_size:
                 continue
-            
+
             valid_faces.append(det)
         
         elapsed = time.time() - start_time

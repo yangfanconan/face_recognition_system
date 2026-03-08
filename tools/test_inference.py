@@ -70,7 +70,7 @@ def test_detector():
         
         return True
     except Exception as e:
-        print(f"\n❌ 检测器测试失败：{e}")
+        print(f"\nDetector test failed: {e}")
         return False
 
 
@@ -107,7 +107,7 @@ def test_recognizer():
         
         return True
     except Exception as e:
-        print(f"\n❌ 识别器测试失败：{e}")
+        print(f"\nRecognizer test failed: {e}")
         return False
 
 
@@ -136,7 +136,7 @@ def test_matcher():
         
         return True
     except Exception as e:
-        print(f"\n❌ 匹配器测试失败：{e}")
+        print(f"\nMatcher test failed: {e}")
         return False
 
 
@@ -161,7 +161,7 @@ def test_pipeline():
         
         return True
     except Exception as e:
-        print(f"\n❌ 流水线测试失败：{e}")
+        print(f"\nPipeline test failed: {e}")
         return False
 
 
@@ -189,11 +189,11 @@ def main():
     print("\n" + "=" * 60)
     print("测试结果汇总")
     print("=" * 60)
-    
+
     for name, passed in results.items():
-        status = "✅ 通过" if passed else "❌ 失败"
+        status = "PASS" if passed else "FAIL"
         print(f"  {name}: {status}")
-    
+
     return all(results.values())
 
 

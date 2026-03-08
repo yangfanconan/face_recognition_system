@@ -109,27 +109,33 @@ class DKGA_Det(nn.Module):
     ) -> Dict:
         """
         前向传播
-        
+
         Args:
             x: 输入图像 (B, 3, H, W)
-            targets: 训练时的目标标注
-            
+            targets: 训练时的目标标注 [{boxes, labels}, ...]
+
         Returns:
             outputs: 预测结果或损失
         """
         # Backbone: 提取多尺度特征
         features = self.backbone(x)  # (P3, P4, P5)
-        
+
         # Neck: 特征融合
         fused_features = self.neck(features)  # (P2, P3, P4, P5)
-        
+
         # Head: 预测
         predictions = self.head(fused_features)
-        
+
         if self.training and targets is not None:
-            # 训练模式：计算损失
-            from models.detection.losses import DetectionLoss
-            loss_fn = DetectionLoss()
+            # 训练模式：计算损失 - 使用完整损失函数
+            from models.detection.complete_loss import DetectionLoss
+            loss_fn = DetectionLoss(
+                num_classes=1,
+                cls_weight=1.0,
+                reg_weight=2.0,
+                kpt_weight=1.5,
+                strides=[4, 8, 16, 32],  # P2, P3, P4, P5
+            )
             losses = loss_fn(predictions, targets)
             return losses
         else:
