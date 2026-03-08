@@ -1,0 +1,336 @@
+# ============================================
+# DDFD-Rec 识别模型训练配置
+# ============================================
+
+defaults:
+  - ../default
+
+# --------------------------------------------
+# 模型配置
+# --------------------------------------------
+recognition:
+  model:
+    name: "DDFD-Rec"
+    pretrained: true
+    pretrained_path: "${paths.checkpoints}/recognition/pretrained.pth"
+    
+    # 输入配置
+    input_channels: 3
+    input_size: 112
+    
+    # 输出配置
+    embedding_size: 512
+    id_dim: 409  # 身份子空间
+    attr_dim: 103  # 属性子空间
+    
+    # 空域分支配置
+    spatial_branch:
+      channels: [64, 128, 256]
+      num_blocks: 2
+      kernel_size: 3
+      use_se: false  # SE 注意力
+      
+    # 频域分支配置
+    frequency_branch:
+      channels: [64, 128, 256]
+      num_blocks: 2
+      use_dct: true
+      dct_channels: 64
+      
+    # 融合模块配置
+    fusion:
+      name: "FGA"  # Frequency Gated Attention
+      use_transformer: true
+      transformer_layers: 4
+      transformer_heads: 8
+      transformer_dim: 256
+      transformer_mlp_ratio: 4.0
+      dropout: 0.1
+      drop_path: 0.1
+      
+    # 身份解耦头
+    head:
+      id_fc_dim: 512
+      attr_fc_dim: 256
+      dropout: 0.4
+      
+  # 损失函数配置
+  loss:
+    # AdaArc Loss 配置
+    name: "AdaArc"
+    s: 32.0  # 缩放因子
+    m_base: 0.5  # 基础边界
+    alpha: 0.1  # 难度系数
+    beta: 0.15  # 硬样本额外边界
+    hard_sample_ratio: 0.2  # 前 20% 为难样本
+    
+    # 属性解耦损失
+    attr_disentangle_weight: 0.5
+    ortho_weight: 0.1  # 身份 - 属性正交约束
+    
+    # 标签平滑
+    label_smooth: 0.1
+    
+  # 分类头配置
+  classifier:
+    num_classes: 100000  # 根据数据集调整
+    use_fc: true
+    use_bn: false
+
+# --------------------------------------------
+# 数据集配置
+# --------------------------------------------
+data:
+  # 训练数据集
+  train:
+    datasets:
+      - name: "WebFace12M"
+        root: "${paths.datasets}/webface12m"
+        split: "train"
+        weight: 1.0
+      - name: "VGGFace2"
+        root: "${paths.datasets}/vggface2"
+        split: "train"
+        weight: 0.5
+      - name: "MS_Celeb_1M"
+        root: "${paths.datasets}/ms_celeb_1m"
+        split: "train"
+        weight: 0.3
+        
+    # 数据增强
+    augmentation:
+      # 几何变换
+      hflip_prob: 0.5
+      random_crop:
+        enabled: true
+        scale: [0.8, 1.0]
+      random_rotation: 15
+      
+      # 光照变换
+      color_jitter:
+        enabled: true
+        brightness: 0.3
+        contrast: 0.3
+        saturation: 0.3
+      random_grayscale: 0.1
+      random_gaussian_blur: 0.1
+      
+      # 遮挡模拟
+      random_erasing:
+        enabled: true
+        prob: 0.3
+        scale: [0.02, 0.15]
+        ratio: [0.5, 2.0]
+      rectangle_mask:
+        enabled: true
+        prob: 0.2
+        num_masks: 1
+        size: [0.1, 0.3]
+        
+      # 高级增强
+      mosaic:
+        enabled: true
+        prob: 0.15
+      mixup:
+        enabled: true
+        prob: 0.1
+        alpha: 0.2
+        
+      # 频域增强 (本方案特色)
+      dct_mask:
+        enabled: true
+        prob: 0.2
+        freq_range: [0.1, 0.5]
+        
+    # 数据加载
+    batch_size: 64
+    num_workers: 8
+    shuffle: true
+    drop_last: true
+    persistent_workers: true
+    
+  # 验证数据集
+  val:
+    datasets:
+      - name: "LFW"
+        root: "${paths.datasets}/lfw"
+        pairs_file: "pairs.txt"
+      - name: "CPLFW"
+        root: "${paths.datasets}/cplfw"
+        
+    batch_size: 32
+    num_workers: 4
+    
+  # 测试数据集
+  test:
+    datasets:
+      - name: "IJB-C"
+        root: "${paths.datasets}/ijbc"
+      - name: "RFW"
+        root: "${paths.datasets}/rfw"
+        
+    batch_size: 1
+    num_workers: 4
+
+# --------------------------------------------
+# 训练配置
+# --------------------------------------------
+training:
+  # 优化器
+  optimizer:
+    name: "SGD"  # 识别任务通常用 SGD
+    lr: 0.1
+    weight_decay: 0.0005
+    momentum: 0.9
+    nesterov: true
+    
+  # 学习率调度
+  scheduler:
+    name: "MultiStepLR"
+    milestones: [30, 60, 90]
+    gamma: 0.1
+    warmup_epochs: 5
+    warmup_lr: 0.0001
+    warmup_type: "linear"
+    
+  # 训练策略
+  epochs: 120
+  grad_clip: 5.0
+  grad_accum_steps: 1
+  use_amp: true
+  use_ddp: true
+  sync_bn: true
+  find_unused_parameters: false
+  
+  # 检查点
+  checkpoint:
+    resume: null
+    save_freq: 5
+    keep_last: 3
+    save_best: true
+    monitor: "val/lfw_accuracy"
+    mode: "max"
+    
+  # 早停
+  early_stop:
+    enabled: true
+    patience: 20
+    monitor: "val/lfw_accuracy"
+    mode: "max"
+    min_delta: 0.0001
+    
+  # 日志
+  logging:
+    tensorboard: true
+    wandb: true  # 推荐开启
+    print_freq: 50
+    eval_freq: 2  # 每 2 个 epoch 评估
+    
+  # EMA
+  ema:
+    enabled: false  # 识别任务通常不用 EMA
+    decay: 0.9999
+
+# --------------------------------------------
+# 评估配置
+# --------------------------------------------
+evaluation:
+  # 评估数据集
+  datasets:
+    - name: "LFW"
+      enabled: true
+      target_accuracy: 0.995
+    - name: "CPLFW"
+      enabled: true
+      target_accuracy: 0.955
+    - name: "IJB-C"
+      enabled: true
+      far_thresholds: [1e-6, 1e-5, 1e-4, 1e-3]
+    - name: "RFW"
+      enabled: true  # 跨种族公平性评估
+      
+  # 评估指标
+  metrics:
+    - "accuracy"
+    - "tar_far"
+    - "roc_auc"
+    - "eer"  # 等错误率
+    
+  # 验证协议
+  lfw:
+    nfolds: 10
+    distance_metric: "cosine"  # cosine/euclidean
+    
+  cplfw:
+    nfolds: 10
+    
+  ijbc:
+    far_thresholds: [1e-6, 1e-5, 1e-4, 1e-3]
+    
+  # 可视化
+  visualization:
+    enabled: true
+    save_dir: "${paths.logs}/vis"
+    plot_roc: true
+    plot_hist: true
+
+# --------------------------------------------
+# 微调配置
+# --------------------------------------------
+finetune:
+  # 微调场景
+  scenario: "mask"  # mask/low_light/tiny_face/cross_age
+  
+  # 场景特定配置
+  scenarios:
+    mask:
+      data_ratio: 0.4  # 口罩数据占比
+      loss_weights:
+        id_loss: 1.0
+        attr_loss: 0.5
+      lr_multiplier: 0.5
+      frozen_layers: ["stem", "stage1"]
+      special_aug: ["rectangle_mask"]
+      
+    low_light:
+      data_ratio: 0.3
+      loss_weights:
+        freq_branch: 1.5
+        spatial_branch: 0.8
+      lr_multiplier: 0.3
+      frozen_layers: ["stem"]
+      special_aug: ["dct_mask", "low_light_enhance"]
+      
+    tiny_face:
+      data_ratio: 0.5
+      loss_weights:
+        small_face_loss: 2.0
+      lr_multiplier: 0.5
+      frozen_layers: []
+      special_aug: ["random_crop_small"]
+      
+    cross_age:
+      data_ratio: 0.3
+      loss_weights:
+        id_loss: 1.0
+        age_invariant_loss: 1.2
+      lr_multiplier: 0.3
+      frozen_layers: ["stem", "stage1", "stage2"]
+      special_aug: ["age_simulation"]
+
+# --------------------------------------------
+# 分布式训练配置
+# --------------------------------------------
+ddp:
+  backend: "nccl"
+  find_unused_parameters: false
+  gradient_as_bucket_view: true
+  static_graph: false
+
+# --------------------------------------------
+# 其他配置
+# --------------------------------------------
+seed: 42
+deterministic: true
+debug: false
+verbose: true

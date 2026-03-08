@@ -1,0 +1,233 @@
+# ============================================
+# DKGA-Det 检测模型训练配置
+# ============================================
+
+defaults:
+  - ../default
+
+# --------------------------------------------
+# 模型配置
+# --------------------------------------------
+detection:
+  model:
+    name: "DKGA-Det"
+    pretrained: true
+    pretrained_path: "${paths.checkpoints}/detection/pretrained.pth"
+    
+    # Backbone 配置
+    backbone:
+      name: "CSPDarknet"
+      depths: [3, 6, 6, 3]
+      channels: [64, 128, 256, 512, 1024]
+      use_dcnv2: true
+      dcnv2_stages: [2, 3]
+      drop_path_rate: 0.1
+      
+    # Neck 配置
+    neck:
+      name: "BiFPN-Lite"
+      channels: [256, 512, 1024]
+      num_fpn_layers: 3
+      use_p2: true
+      attention: true  # 注意力机制
+      
+    # Head 配置
+    head:
+      name: "DecoupledHead"
+      channels: 256
+      num_cls_convs: 2
+      num_reg_convs: 2
+      use_gn: true
+      prior_prob: 0.01  # 初始化偏置
+      
+  # 损失函数配置
+  loss:
+    cls_type: "focal"  # focal/varifocal
+    cls_weight: 1.0
+    reg_type: "ciou"  # ciou/giou/iou
+    reg_weight: 2.0
+    kpt_type: "wing"  # wing/smooth_l1
+    kpt_weight: 1.5
+    focal_gamma: 2.0
+    focal_alpha: 0.25
+    wing_w: 10.0
+    wing_epsilon: 2.0
+    
+  # NMS 配置
+  nms:
+    score_thresh: 0.25
+    nms_thresh: 0.45
+    max_detections: 300
+    class_agnostic: false
+
+# --------------------------------------------
+# 数据集配置
+# --------------------------------------------
+data:
+  # 训练数据集
+  train:
+    datasets:
+      - name: "WiderFace"
+        root: "${paths.datasets}/widerface"
+        split: "train"
+        weight: 1.0
+      - name: "WebFace12M_Det"
+        root: "${paths.datasets}/webface12m_det"
+        split: "train"
+        weight: 0.5
+        
+    # 数据增强
+    augmentation:
+      mosaic:
+        enabled: true
+        prob: 0.2
+      mixup:
+        enabled: true
+        prob: 0.1
+        alpha: 0.2
+      copypaste:
+        enabled: false
+        prob: 0.1
+        
+      hflip_prob: 0.5
+      random_crop:
+        enabled: true
+        scale: [0.8, 1.0]
+      random_rotation: 15
+      color_jitter:
+        enabled: true
+        brightness: 0.3
+        contrast: 0.3
+        saturation: 0.3
+      blur_prob: 0.1
+      erasing_prob: 0.3
+      
+    # 数据加载
+    batch_size: 32
+    num_workers: 8
+    shuffle: true
+    drop_last: true
+    
+  # 验证数据集
+  val:
+    datasets:
+      - name: "WiderFace"
+        root: "${paths.datasets}/widerface"
+        split: "val"
+        
+    batch_size: 32
+    num_workers: 8
+    shuffle: false
+    
+  # 测试数据集
+  test:
+    datasets:
+      - name: "FDDB"
+        root: "${paths.datasets}/fddb"
+      - name: "AFW"
+        root: "${paths.datasets}/afw"
+        
+    batch_size: 1
+    num_workers: 4
+
+# --------------------------------------------
+# 训练配置
+# --------------------------------------------
+training:
+  # 优化器
+  optimizer:
+    name: "AdamW"
+    lr: 0.001
+    weight_decay: 0.05
+    betas: [0.9, 0.999]
+    
+  # 学习率调度
+  scheduler:
+    name: "CosineAnnealingLR"
+    T_max: 100
+    eta_min: 0.00001
+    warmup_epochs: 5
+    warmup_lr: 0.0001
+    warmup_type: "linear"
+    
+  # 训练策略
+  epochs: 100
+  grad_clip: 5.0
+  grad_accum_steps: 1
+  use_amp: true
+  use_ddp: true
+  sync_bn: true
+  find_unused_parameters: false
+  
+  # 检查点
+  checkpoint:
+    resume: null  # 断点续训路径
+    save_freq: 5
+    keep_last: 3
+    save_best: true
+    monitor: "val/map_0.5"
+    mode: "max"
+    
+  # 早停
+  early_stop:
+    enabled: true
+    patience: 15
+    monitor: "val/map_0.5"
+    mode: "max"
+    min_delta: 0.001
+    
+  # 日志
+  logging:
+    tensorboard: true
+    wandb: false
+    print_freq: 10
+    eval_freq: 1
+    
+  # EMA (指数移动平均)
+  ema:
+    enabled: true
+    decay: 0.9999
+
+# --------------------------------------------
+# 评估配置
+# --------------------------------------------
+evaluation:
+  # 评估指标
+  metrics:
+    - "map"  # mAP@0.5:0.95
+    - "map_0.5"  # mAP@0.5
+    - "map_0.75"  # mAP@0.75
+    - "mr"  # Miss Rate
+    - "precision"
+    - "recall"
+    
+  # WiderFace 评估
+  widerface:
+    eval_scales: [1.0]  # 多尺度评估
+    iou_thresh: 0.5
+    
+  # 可视化
+  visualization:
+    enabled: true
+    save_dir: "${paths.logs}/vis"
+    thresh: 0.5
+
+# --------------------------------------------
+# 分布式训练配置
+# --------------------------------------------
+ddp:
+  backend: "nccl"
+  find_unused_parameters: false
+  gradient_as_bucket_view: true
+  static_graph: false
+
+# --------------------------------------------
+# 其他配置
+# --------------------------------------------
+# 随机种子
+seed: 42
+deterministic: true
+
+# 调试模式
+debug: false
+verbose: true

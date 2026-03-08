@@ -1,0 +1,304 @@
+# ============================================
+# DDFD-FaceRec 默认配置文件
+# ============================================
+
+# --------------------------------------------
+# 项目配置
+# --------------------------------------------
+project:
+  name: "DDFD-FaceRec"
+  version: "0.1.0"
+  description: "Dual-Domain Feature Decoupling Face Recognition System"
+
+# --------------------------------------------
+# 路径配置
+# --------------------------------------------
+paths:
+  root: "/path/to/face_recognition_system"
+  checkpoints: "${paths.root}/checkpoints"
+  logs: "${paths.root}/logs"
+  datasets: "${paths.root}/datasets"
+  data_dir: "${paths.root}/data"
+  models_dir: "${paths.root}/models"
+  configs_dir: "${paths.root}/configs"
+
+# --------------------------------------------
+# 设备配置
+# --------------------------------------------
+device:
+  cuda: true
+  gpu_ids: [0, 1, 2, 3]  # 多 GPU 训练
+  num_workers: 8  # 数据加载线程数
+  pin_memory: true
+  benchmark: true  # cudnn.benchmark
+
+# --------------------------------------------
+# 数据配置
+# --------------------------------------------
+data:
+  # 输入图像配置
+  input_size: 640  # 检测输入
+  rec_input_size: 112  # 识别输入
+  
+  # 数据加载
+  batch_size: 32  # 每卡 batch size
+  num_workers: 8
+  pin_memory: true
+  
+  # 数据增强
+  augmentation:
+    hflip_prob: 0.5
+    color_jitter: true
+    random_crop: true
+    random_rotation: 15
+    blur_prob: 0.1
+    erasing_prob: 0.3
+    
+  # 归一化
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+
+# --------------------------------------------
+# 检测模型配置 (DKGA-Det)
+# --------------------------------------------
+detection:
+  model:
+    name: "DKGA-Det"
+    input_channels: 3
+    input_size: 640
+    num_classes: 1  # 人脸
+    num_keypoints: 5  # 5 个关键点
+    
+    # Backbone 配置
+    backbone:
+      name: "CSPDarknet"
+      depths: [3, 6, 6, 3]
+      channels: [64, 128, 256, 512, 1024]
+      use_dcnv2: true  # 可变形卷积
+      dcnv2_stages: [2, 3]  # 使用 DCNv2 的阶段
+      
+    # Neck 配置
+    neck:
+      name: "BiFPN-Lite"
+      channels: [256, 512, 1024]
+      num_fpn_layers: 3
+      use_p2: true  # P2 层用于小目标检测
+      
+    # Head 配置
+    head:
+      name: "DecoupledHead"
+      channels: 256
+      num_cls_convs: 2
+      num_reg_convs: 2
+      use_gn: true  # GroupNorm
+      
+  # 损失函数配置
+  loss:
+    cls_weight: 1.0
+    reg_weight: 2.0
+    kpt_weight: 1.5
+    focal_gamma: 2.0
+    focal_alpha: 0.25
+    
+  # NMS 配置
+  nms:
+    score_thresh: 0.25
+    nms_thresh: 0.45
+    max_detections: 300
+
+# --------------------------------------------
+# 识别模型配置 (DDFD-Rec)
+# --------------------------------------------
+recognition:
+  model:
+    name: "DDFD-Rec"
+    input_channels: 3
+    input_size: 112
+    embedding_size: 512
+    id_dim: 409  # 身份子空间维度
+    attr_dim: 103  # 属性子空间维度
+    
+    # 空域分支配置
+    spatial_branch:
+      channels: [64, 128, 256]
+      num_blocks: 2
+      
+    # 频域分支配置
+    frequency_branch:
+      channels: [64, 128, 256]
+      num_blocks: 2
+      use_dct: true
+      
+    # 融合模块配置
+    fusion:
+      name: "FGA"  # Frequency Gated Attention
+      use_transformer: true
+      transformer_layers: 4
+      transformer_heads: 8
+      transformer_dim: 256
+      
+  # 损失函数配置
+  loss:
+    name: "AdaArc"
+    s: 32.0  # 缩放因子
+    m_base: 0.5  # 基础边界
+    alpha: 0.1  # 难度系数
+    beta: 0.15  # 硬样本额外边界
+    attr_disentangle_weight: 0.5
+    ortho_weight: 0.1  # 正交约束权重
+
+# --------------------------------------------
+# 训练配置
+# --------------------------------------------
+training:
+  # 优化器
+  optimizer:
+    name: "AdamW"  # 或 SGD
+    lr: 0.001
+    weight_decay: 0.05
+    betas: [0.9, 0.999]
+    momentum: 0.9  # SGD 用
+    
+  # 学习率调度
+  scheduler:
+    name: "CosineAnnealingLR"  # 或 MultiStepLR
+    T_max: 100
+    eta_min: 0.00001
+    warmup_epochs: 5
+    warmup_lr: 0.0001
+    
+  # 训练策略
+  epochs: 100
+  grad_clip: 5.0
+  grad_accum_steps: 1
+  use_amp: true  # 混合精度训练
+  use_ddp: true  # 分布式训练
+  
+  # 检查点
+  checkpoint:
+    save_freq: 5  # 每 N 个 epoch 保存
+    keep_last: 3  # 保留最后 N 个
+    save_best: true
+    
+  # 早停
+  early_stop:
+    enabled: true
+    patience: 10
+    monitor: "val_loss"
+    mode: "min"
+    
+  # 日志
+  logging:
+    tensorboard: true
+    wandb: false
+    print_freq: 10  # 每 N 步打印
+    eval_freq: 1  # 每 N 个 epoch 评估
+
+# --------------------------------------------
+# 评估配置
+# --------------------------------------------
+evaluation:
+  # 评估数据集
+  datasets:
+    - name: "LFW"
+      enabled: true
+    - name: "CPLFW"
+      enabled: true
+    - name: "IJB-C"
+      enabled: false
+      
+  # 评估指标
+  metrics:
+    - "accuracy"
+    - "tar_far"
+    - "roc_auc"
+    
+  # FAR 阈值
+  far_thresholds: [1e-6, 1e-5, 1e-4, 1e-3]
+
+# --------------------------------------------
+# 推理配置
+# --------------------------------------------
+inference:
+  # 模型格式
+  model_format: "tensorrt"  # pytorch/onnx/tensorrt/openvino
+  precision: "fp16"  # fp32/fp16/int8
+  
+  # 推理参数
+  batch_size: 1
+  device_id: 0
+  
+  # 检测参数
+  detection:
+    min_face_size: 32
+    max_faces: 50
+    score_thresh: 0.6
+    
+  # 比对参数
+  matching:
+    threshold: 0.6
+    top_k: 10
+    id_weight: 0.85  # 身份子空间权重
+    attr_weight: 0.15  # 属性子空间权重
+
+# --------------------------------------------
+# API 服务配置
+# --------------------------------------------
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4
+  reload: false
+  
+  # CORS
+  cors:
+    enabled: true
+    origins: ["*"]
+    
+  # 认证
+  auth:
+    enabled: false
+    api_key_header: "X-API-Key"
+    
+  # 限流
+  rate_limit:
+    enabled: false
+    requests_per_minute: 60
+    
+  # 日志
+  logging:
+    access_log: true
+    slow_request_threshold: 1.0  # 秒
+
+# --------------------------------------------
+# 数据库配置
+# --------------------------------------------
+database:
+  # PostgreSQL
+  postgres:
+    host: "localhost"
+    port: 5432
+    database: "facerec"
+    user: "postgres"
+    password: "password"
+    
+  # Redis
+  redis:
+    host: "localhost"
+    port: 6379
+    db: 0
+    password: null
+    
+  # 对象存储 (MinIO/S3)
+  storage:
+    type: "minio"  # minio/s3/local
+    endpoint: "localhost:9000"
+    bucket: "faces"
+    access_key: "minioadmin"
+    secret_key: "minioadmin"
+
+# --------------------------------------------
+# 随机种子 (复现性)
+# --------------------------------------------
+seed: 42
+deterministic: true
