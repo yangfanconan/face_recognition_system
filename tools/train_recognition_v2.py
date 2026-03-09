@@ -175,9 +175,12 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler,
             # 前向传播
             features = model(images)
             
+            # 确保特征归一化（ArcFace 需要）
+            features = F.normalize(features, p=2, dim=1)
+            
             # 计算损失
             if isinstance(criterion, (ArcFaceLoss, CosFaceLoss)):
-                # ArcFace/CosFace 需要原始特征（未归一化）
+                # ArcFace/CosFace 需要归一化特征
                 loss = criterion(features, labels)
             else:
                 # 普通 CrossEntropy
@@ -338,26 +341,70 @@ def main():
     # ============================================
     print("📁 加载数据集...")
     
-    # 简化：使用 ImageFolder 格式
-    # 实际使用需要替换为完整的数据加载代码
-    from torchvision import datasets, transforms
+    # 使用专门的 LFWDataset 而不是 ImageFolder
+    from data.datasets.loader import CustomFaceDataset
     
-    train_transform = transforms.Compose([
-        transforms.RandomHorizontalFlip(),
-        transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3),
-        transforms.RandomRotation(15),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-    ])
+    # 检查是否是 ImageFolder 格式
+    test_dir = Path(args.data_dir)
+    is_imagefolder = any((test_dir / d).is_dir() for d in test_dir.iterdir() if d.is_dir())
     
-    val_transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-    ])
-    
-    # 加载数据（假设数据集是 ImageFolder 格式）
-    train_dataset = datasets.ImageFolder(args.data_dir, transform=train_transform)
-    val_dataset = datasets.ImageFolder(args.data_dir, transform=val_transform)
+    if is_imagefolder:
+        # ImageFolder 格式（每个子目录是一个类别）
+        from torchvision import datasets, transforms
+        
+        train_transform = transforms.Compose([
+            transforms.RandomHorizontalFlip(),
+            transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3),
+            transforms.RandomRotation(15),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+        ])
+        
+        val_transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+        ])
+        
+        # 划分训练集和验证集
+        full_dataset = datasets.ImageFolder(args.data_dir, transform=train_transform)
+        
+        # 80/20 划分
+        from torch.utils.data import random_split
+        train_size = int(0.8 * len(full_dataset))
+        val_size = len(full_dataset) - train_size
+        train_dataset, val_dataset = random_split(
+            full_dataset, 
+            [train_size, val_size],
+            generator=torch.Generator().manual_seed(42)
+        )
+        
+        # 验证集使用不同的 transform
+        val_dataset.dataset.transform = val_transform
+    else:
+        # 使用自定义数据加载器
+        train_transform = transforms.Compose([
+            transforms.RandomHorizontalFlip(),
+            transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3),
+            transforms.RandomRotation(15),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+        ])
+        
+        val_transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+        ])
+        
+        train_dataset = CustomFaceDataset(
+            root=args.data_dir,
+            transform=train_transform,
+            split='train'
+        )
+        val_dataset = CustomFaceDataset(
+            root=args.data_dir,
+            transform=val_transform,
+            split='val'
+        )
     
     train_loader = DataLoader(
         train_dataset,

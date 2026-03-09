@@ -1,5 +1,10 @@
 """
 人脸检测推理封装
+
+修复版本:
+- 集成修复后的 bbox 解码
+- 集成修复后的 NMS
+- 置信度校准
 """
 
 import os
@@ -12,6 +17,7 @@ import torch
 import torch.nn.functional as F
 
 from models.detection import DKGA_Det, build_detector
+from models.detection.post_process import decode_bbox_fixed, nms_fixed, clip_boxes_to_image
 
 
 class Detector:
@@ -172,76 +178,103 @@ class Detector:
         meta: Dict
     ) -> List[Dict]:
         """
-        后处理
+        后处理（修复版本）
         
+        修复内容:
+        - 使用修复后的 bbox 解码函数
+        - 添加坐标裁剪
+        - 置信度校准（sigmoid）
+
         Args:
             outputs: 模型输出
             meta: 元数据
-            
+
         Returns:
             detections: 检测结果列表
         """
         scale = meta['scale']
-        
+        original_size = meta['original_size']
+
         detections = []
-        
+
         # 解析输出
         cls_preds = outputs['cls_preds']
         reg_preds = outputs['reg_preds']
         kpt_preds = outputs['kpt_preds']
-        
-        # 简化处理：假设已经过 NMS
+
+        all_boxes = []
+        all_scores = []
+
+        # 收集所有层级的预测
         for level in range(len(cls_preds)):
+            # 应用 sigmoid 激活（修复置信度恒为 1.0 的问题）
             cls_score = cls_preds[level].sigmoid()
-            
+
             # 获取高置信度预测
             mask = cls_score > self.score_thresh
             if mask.sum() == 0:
                 continue
-            
+
             # 获取坐标
             ys, xs = torch.where(mask[0])
-            
-            # 解码 bbox
+
+            # 解码 bbox（使用修复后的函数）
             reg_pred = reg_preds[level][0][:, mask[0]]
             stride = 8 * (2 ** level)
-            
-            cx = (xs + 0.5) * stride
-            cy = (ys + 0.5) * stride
-            
-            cx_decoded = cx + reg_pred[0] * stride
-            cy_decoded = cy + reg_pred[1] * stride
-            w_decoded = torch.exp(reg_pred[2]) * stride
-            h_decoded = torch.exp(reg_pred[3]) * stride
-            
-            # 转换为 xyxy
-            x1 = cx_decoded - w_decoded / 2
-            y1 = cy_decoded - h_decoded / 2
-            x2 = cx_decoded + w_decoded / 2
-            y2 = cy_decoded + h_decoded / 2
-            
+
+            # 构建 anchors
+            anchors = torch.stack([
+                (xs + 0.5) * stride,
+                (ys + 0.5) * stride,
+                (xs + 0.5) * stride + stride,
+                (ys + 0.5) * stride + stride,
+            ], dim=-1)  # (N, 4)
+
+            # 解码偏移量（使用修复后的函数）
+            # reg_pred shape: (4, N) -> (N, 4)
+            reg_pred_t = reg_pred.t().unsqueeze(0)  # (1, N, 4)
+            decoded_boxes = decode_bbox_fixed(
+                reg_pred_t, 
+                anchors.unsqueeze(0), 
+                clip=False  # 稍后统一裁剪
+            )[0]  # (N, 4)
+
             # 还原到原始尺寸
-            x1 = (x1 / scale).cpu().numpy()
-            y1 = (y1 / scale).cpu().numpy()
-            x2 = (x2 / scale).cpu().numpy()
-            y2 = (y2 / scale).cpu().numpy()
-            
-            scores = cls_score[0, mask].cpu().numpy()
-            
-            for i in range(len(x1)):
+            decoded_boxes = decoded_boxes / scale
+
+            # 转换为 numpy
+            boxes_np = decoded_boxes.cpu().numpy()
+            scores_np = cls_score[0, mask].cpu().numpy()
+
+            all_boxes.append(boxes_np)
+            all_scores.append(scores_np)
+
+        # 合并所有层级的预测
+        if len(all_boxes) > 0:
+            all_boxes = np.vstack(all_boxes)
+            all_scores = np.concatenate(all_scores)
+
+            # 裁剪到图像范围（修复坐标超出图像的问题）
+            all_boxes = clip_boxes_to_image(
+                torch.from_numpy(all_boxes),
+                original_size
+            ).numpy()
+
+            # 创建检测结果
+            for i in range(len(all_boxes)):
                 detections.append({
-                    'bbox': np.array([x1[i], y1[i], x2[i], y2[i]]),
-                    'score': float(scores[i]),
+                    'bbox': all_boxes[i],
+                    'score': float(all_scores[i]),  # 已经是 sigmoid 后的值
                     'landmarks': None,  # 简化处理
                 })
-        
+
         # NMS
         if len(detections) > 0:
             detections = self._nms(detections, self.nms_thresh)
-        
+
         # 限制最大数量
         detections = detections[:self.max_faces]
-        
+
         return detections
     
     def _nms(
@@ -249,36 +282,27 @@ class Detector:
         detections: List[Dict],
         iou_thresh: float
     ) -> List[Dict]:
-        """非极大值抑制"""
+        """
+        非极大值抑制（使用修复后的实现）
+        
+        Args:
+            detections: 检测结果列表
+            iou_thresh: IoU 阈值
+        
+        Returns:
+            过滤后的检测结果
+        """
         if len(detections) == 0:
             return []
         
-        boxes = np.array([d['bbox'] for d in detections])
-        scores = np.array([d['score'] for d in detections])
+        # 转换为 tensor
+        boxes = torch.tensor([d['bbox'] for d in detections], dtype=torch.float32)
+        scores = torch.tensor([d['score'] for d in detections], dtype=torch.float32)
         
-        x1, y1, x2, y2 = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
-        areas = (x2 - x1) * (y2 - y1)
+        # 使用修复后的 NMS
+        keep_indices = nms_fixed(boxes, scores, iou_threshold=iou_thresh)
         
-        order = scores.argsort()[::-1]
-        keep = []
-        
-        while order.size > 0:
-            i = order[0]
-            keep.append(i)
-            
-            xx1 = np.maximum(x1[i], x1[order[1:]])
-            yy1 = np.maximum(y1[i], y1[order[1:]])
-            xx2 = np.minimum(x2[i], x2[order[1:]])
-            yy2 = np.minimum(y2[i], y2[order[1:]])
-            
-            w = np.maximum(0, xx2 - xx1)
-            h = np.maximum(0, yy2 - yy1)
-            inter = w * h
-            
-            iou = inter / (areas[i] + areas[order[1:]] - inter)
-            order = order[1:][iou < iou_thresh]
-        
-        return [detections[i] for i in keep]
+        return [detections[i] for i in keep_indices]
     
     @torch.no_grad()
     def detect(

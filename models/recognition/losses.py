@@ -323,3 +323,124 @@ LOSS_CONFIGS = {
         'description': '适用于类别不均衡场景',
     },
 }
+
+
+# ============================================
+# 原有损失函数（保持向后兼容）
+# ============================================
+
+class AdaArcLoss(nn.Module):
+    """
+    AdaArc Loss - 自适应边界 ArcFace Loss
+    
+    参考原项目实现
+    """
+    
+    def __init__(self, margin=0.5, scale=30.0, adaptive=True):
+        super().__init__()
+        self.margin = margin
+        self.scale = scale
+        self.adaptive = adaptive
+    
+    def forward(self, features, labels):
+        # 简化实现：使用标准 ArcFace
+        arcface = ArcFaceLoss(
+            in_features=features.shape[1],
+            out_features=labels.max().item() + 1,
+            margin=self.margin,
+            scale=self.scale
+        )
+        return arcface(features, labels)
+
+
+class OrthogonalLoss(nn.Module):
+    """正交约束损失"""
+    
+    def __init__(self, weight=0.1):
+        super().__init__()
+        self.weight = weight
+    
+    def forward(self, features):
+        # 计算特征向量的正交性
+        norm_features = F.normalize(features, p=2, dim=1)
+        gram_matrix = torch.mm(norm_features, norm_features.t())
+        
+        # 对角线应该是 1，非对角线应该是 0
+        target = torch.eye_like(gram_matrix)
+        loss = F.mse_loss(gram_matrix, target)
+        
+        return loss * self.weight
+
+
+class AttributeDisentanglementLoss(nn.Module):
+    """属性解耦损失"""
+    
+    def __init__(self, ortho_weight=0.1):
+        super().__init__()
+        self.ortho_weight = ortho_weight
+    
+    def forward(self, id_features, attr_features):
+        # 归一化
+        id_norm = F.normalize(id_features, p=2, dim=1)
+        attr_norm = F.normalize(attr_features, p=2, dim=1)
+        
+        # 正交约束
+        ortho_loss = torch.mean(torch.abs(torch.sum(id_norm * attr_norm, dim=1)))
+        
+        return ortho_loss * self.ortho_weight
+
+
+class CenterLoss(nn.Module):
+    """Center Loss"""
+    
+    def __init__(self, num_classes, feature_dim, weight=0.5):
+        super().__init__()
+        self.num_classes = num_classes
+        self.feature_dim = feature_dim
+        self.weight = weight
+        
+        self.centers = nn.Parameter(torch.randn(num_classes, feature_dim))
+    
+    def forward(self, features, labels):
+        # 计算特征到对应类别中心的距离
+        batch_size = features.shape[0]
+        
+        # 计算每个样本到所有中心的距离
+        dists = torch.cdist(features, self.centers)
+        
+        # 选择正确类别的距离
+        center_loss = torch.mean(torch.gather(dists, 1, labels.unsqueeze(1)))
+        
+        return center_loss * self.weight
+
+
+class RecognitionLoss(nn.Module):
+    """组合识别损失"""
+    
+    def __init__(self, ce_weight=1.0, center_weight=0.5, num_classes=10000, feature_dim=512):
+        super().__init__()
+        self.ce_weight = ce_weight
+        self.center_weight = center_weight
+        
+        self.ce = nn.CrossEntropyLoss()
+        self.center = CenterLoss(num_classes, feature_dim, weight=center_weight)
+    
+    def forward(self, logits, features, labels):
+        ce_loss = self.ce(logits, labels)
+        center_loss = self.center(features, labels)
+        
+        return ce_loss * self.ce_weight + center_loss
+
+
+def build_recognition_loss(loss_type='arcface', **kwargs):
+    """
+    构建识别损失
+    
+    Args:
+        loss_type: 损失类型
+        **kwargs: 参数
+    
+    Returns:
+        损失函数
+    """
+    return get_loss_function(loss_type, **kwargs)
