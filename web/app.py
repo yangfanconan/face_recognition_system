@@ -24,7 +24,8 @@ from PIL import Image
 import gradio as gr
 
 # 添加项目路径
-sys.path.insert(0, str(Path(__file__).parent.parent))
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from inference.detector import Detector
 from inference.recognizer import Recognizer
@@ -478,8 +479,10 @@ def main():
     demo.launch(
         server_name="0.0.0.0",
         server_port=7860,
-        share=False,
+        share=True,
         show_error=True,
+        inbrowser=True,
+        show_api=False,
     )
 
 

@@ -1,0 +1,21 @@
+{
+  "total_pairs": 737,
+  "same_person_pairs": 180,
+  "different_person_pairs": 557,
+  "detection_rate": 0.8569767441859967,
+  "total_attempts": 860,
+  "auc": 0.5772890484739677,
+  "eer": 0.438474965090764,
+  "eer_threshold": 0.9860571622848511,
+  "optimal_threshold": 0.9882726073265076,
+  "fnmr_at_fmr_1e-4": 1.0,
+  "fnmr_at_fmr_1e-6": 1.0,
+  "accuracy": 0.666214382632293,
+  "tp": 72,
+  "tn": 419,
+  "fp": 138,
+  "fn": 108,
+  "precision": 0.3428571428569796,
+  "recall": 0.3999999999997778,
+  "test_time_seconds": 16.190935611724854
+}

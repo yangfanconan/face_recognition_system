@@ -24,6 +24,7 @@
 | **人脸特征提取** (DDFD-Rec) | ✅ 已完成 | 100% | 5.10 (↓22.2%) | ~6ms |
 | **1-N 比对** (IADM) | ✅ 已完成 | 100% | - | 0.4ms@1000 |
 | **完整流水线** | ✅ 已完成 | 100% | - | - |
+| **端到端测试框架** | ✅ 新增 | 100% | - | - |
 
 ### 🏆 核心成就
 
@@ -167,6 +168,7 @@ python tools/train_recognition_complete.py \
 - [训练指南](#训练指南)
 - [推理部署](#推理部署)
 - [性能基准](#性能基准)
+- [**端到端测试框架**](#端到端测试框架)
 - [项目结构](#项目结构)
 - [更新日志](#更新日志)
 
@@ -382,7 +384,53 @@ curl -X POST "http://localhost:8000/api/v1/verify" \
 
 ---
 
+## 🧪 端到端测试框架
+
+### 快速开始
+
+```bash
+# 1. 环境配置
+cd tests/benchmarks
+setup_env.bat  # Windows
+# 或
+./setup_env.sh  # Linux/Mac
+
+# 2. 下载测试数据集
+python datasets/dataset_download.py --download lfw lfw_pairs
+
+# 3. 运行测试
+python run_test.py --config configs/default_config.yaml
+```
+
+### 测试覆盖
+
+| 测试类型 | 数据集 | 核心指标 |
+|---------|-------|---------|
+| **FRTE** | LFW | FNMR@FMR=10⁻⁴/10⁻⁶, AUC, EER |
+| **跨姿态** | CFP-FP | 准确率 |
+| **跨年龄** | AgeDB-30 | 准确率 |
+| **跨种族** | RFW | 公平性差距 |
+| **人脸检测** | WIDER Face | mAP, Recall |
+
+### 输出报告
+
+- **HTML 报告**: 可视化测试结果
+- **Markdown 报告**: 详细指标分析
+- **JSON 结果**: 原始数据
+
+📖 **详细文档**: `tests/benchmarks/QUICKSTART.md`
+
+---
+
 ## 📝 更新日志
+
+### v1.0-beta (2026-03-09)
+
+**新增**:
+- ✅ 端到端自动化测试框架 (NIST FRTE 标准)
+- ✅ LFW/CFP-FP/AgeDB/RFW 数据集支持
+- ✅ HTML/Markdown 测试报告生成
+- ✅ 环境自动配置脚本
 
 ### v1.0-beta (2026-03-08)
 

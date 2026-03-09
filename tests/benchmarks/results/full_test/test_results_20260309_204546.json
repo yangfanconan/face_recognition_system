@@ -1,0 +1,71 @@
+{
+  "timestamp": "2026-03-09T20:45:54.434672",
+  "config": {
+    "model": {
+      "detector": {
+        "checkpoint": "checkpoints/detection/best.pth",
+        "input_size": [
+          640,
+          640
+        ],
+        "score_thresh": 0.5,
+        "nms_thresh": 0.45,
+        "device": "cuda"
+      },
+      "recognizer": {
+        "checkpoint": "checkpoints/recognition/best.pth",
+        "input_size": [
+          112,
+          112
+        ],
+        "feature_dim": 409,
+        "device": "cuda"
+      },
+      "matcher": {
+        "threshold": 0.6,
+        "metric": "cosine"
+      }
+    },
+    "test": {
+      "lfw": {
+        "enabled": true,
+        "data_dir": "datasets/lfw",
+        "max_samples": null
+      },
+      "detection": {
+        "enabled": true,
+        "data_dir": "datasets/widerface",
+        "max_samples": 100
+      }
+    },
+    "output": {
+      "results_dir": "tests/benchmarks/results/full_test",
+      "reports_dir": "tests/benchmarks/reports/full_test",
+      "logs_dir": "tests/benchmarks/logs"
+    }
+  },
+  "environment": {
+    "python_version": "3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]",
+    "torch_version": "2.5.1+cu121",
+    "cuda_available": true,
+    "cuda_version": "12.1",
+    "gpu_name": "NVIDIA GeForce RTX 4090"
+  },
+  "tests": {
+    "lfw": {
+      "error": "pairs.txt not found"
+    },
+    "detection": {
+      "total_images": 100,
+      "detection_results": [],
+      "inference_times": [],
+      "avg_inference_time": 0,
+      "fps": 0,
+      "avg_faces_per_image": NaN
+    },
+    "feature_quality": {
+      "error": "not enough samples"
+    }
+  },
+  "total_time": 219.1383821964264
+}

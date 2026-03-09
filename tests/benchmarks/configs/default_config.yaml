@@ -1,0 +1,211 @@
+# ============================================
+# 人脸识别模型端到端自动化测试配置
+# ============================================
+
+# --------------------------------------------
+# 模型配置
+# --------------------------------------------
+model:
+  # 人脸检测模型
+  detector:
+    enabled: true
+    checkpoint: "checkpoints/detection/best.pth"  # 模型权重路径
+    input_size: [640, 640]  # 输入图像尺寸
+    score_thresh: 0.5  # 检测置信度阈值
+    nms_thresh: 0.45  # NMS 阈值
+    device: "cuda"  # cuda/cpu
+    
+  # 特征提取模型
+  recognizer:
+    enabled: true
+    checkpoint: "checkpoints/recognition/best.pth"  # 模型权重路径
+    input_size: [112, 112]  # 输入图像尺寸
+    feature_dim: 512  # 特征维度
+    device: "cuda"  # cuda/cpu
+    
+  # 特征比对模块
+  matcher:
+    enabled: true
+    threshold: 0.6  # 匹配阈值
+    metric: "cosine"  # cosine/euclidean
+    identity_weight: 0.85  # 身份特征权重（用于解耦特征）
+
+# --------------------------------------------
+# 测试数据集配置
+# --------------------------------------------
+datasets:
+  # 官方权威评测
+  nist:
+    frte:
+      enabled: false  # FRTE 测试（需要官方数据集）
+      data_dir: "datasets/nist_frte"
+      fmr_targets: [1e-4, 1e-6]  # FMR 目标阈值
+      
+    five:
+      enabled: false  # 视频流测试
+      data_dir: "datasets/nist_five"
+      video_files: []  # 视频文件列表
+      
+    fmd:
+      enabled: false  # 变形人脸检测
+      data_dir: "datasets/nist_fmd"
+      
+  # 学术基准数据集
+  academic:
+    lfw:
+      enabled: true
+      data_dir: "datasets/lfw"
+      auto_download: true
+      pairs_file: "pairs.txt"
+      
+    cfp_fp:
+      enabled: true
+      data_dir: "datasets/cfp_fp"
+      auto_download: true
+      
+    agedb:
+      enabled: true
+      data_dir: "datasets/agedb"
+      auto_download: true
+      
+    ijb_c:
+      enabled: false  # 需要申请
+      data_dir: "datasets/ijb_c"
+      
+    megaface:
+      enabled: false  # 百万级测试
+      data_dir: "datasets/megaface"
+      gallery_size: 1000000
+      
+    rfw:
+      enabled: true  # 跨种族公平性
+      data_dir: "datasets/rfw"
+      auto_download: true
+      
+    rmfd:
+      enabled: true  # 口罩人脸
+      data_dir: "datasets/rmfd"
+      auto_download: false
+      
+    casia_fasd:
+      enabled: true  # 活体检测
+      data_dir: "datasets/casia_fasd"
+      auto_download: false
+
+# --------------------------------------------
+# 测试参数配置
+# --------------------------------------------
+test:
+  # 批量测试配置
+  batch_size: 32
+  num_workers: 4
+  
+  # 断点续跑
+  resume: true
+  checkpoint_dir: "tests/benchmarks/results/checkpoints"
+  
+  # 进度监控
+  log_interval: 100  # 每 N 个样本打印一次进度
+  save_interval: 1000  # 每 N 个样本保存一次中间结果
+  
+  # 异常处理
+  max_retries: 3  # 最大重试次数
+  timeout: 60  # 单样本超时时间（秒）
+  
+  # 性能测试
+  warmup_iters: 10  # 预热迭代次数
+  benchmark_iters: 100  # 性能测试迭代次数
+
+# --------------------------------------------
+# 指标计算配置
+# --------------------------------------------
+metrics:
+  # 检测模块指标
+  detection:
+    - "AP"  # 平均精度
+    - "mAP"  # 均值 AP
+    - "recall"  # 召回率
+    - "precision"  # 精确率
+    - "fps"  # 推理帧率
+    
+  # 识别模块指标
+  recognition:
+    - "accuracy"  # 准确率
+    - "fnmr_at_fmr"  # FNMR@FMR
+    - "top1_accuracy"  # Top-1 准确率
+    - "top5_accuracy"  # Top-5 准确率
+    - "verification_roc"  # ROC 曲线
+    
+  # 性能指标
+  performance:
+    - "inference_time"  # 推理时间
+    - "fps"  # 帧率
+    - "memory_usage"  # 内存使用
+    - "throughput"  # 吞吐量
+
+# --------------------------------------------
+# 报告生成配置
+# --------------------------------------------
+report:
+  output_dir: "tests/benchmarks/reports"
+  formats: ["html", "pdf", "json", "markdown"]
+  
+  # 可视化
+  plots:
+    roc_curve: true
+    det_curve: true
+    accuracy_comparison: true
+    confusion_matrix: true
+    fps_comparison: true
+    
+  # 对比分析
+  comparison_models:
+    - name: "ArcFace"
+      lfw_accuracy: 0.9983
+      cfp_fp_accuracy: 0.9958
+    - name: "FaceNet"
+      lfw_accuracy: 0.9963
+      cfp_fp_accuracy: 0.9930
+    - name: "CosFace"
+      lfw_accuracy: 0.9973
+      cfp_fp_accuracy: 0.9945
+      
+  # 报告内容
+  include:
+    - "environment_info"
+    - "dataset_stats"
+    - "detection_results"
+    - "recognition_results"
+    - "performance_results"
+    - "comparison_analysis"
+    - "failure_analysis"
+    - "optimization_suggestions"
+
+# --------------------------------------------
+# 环境配置
+# --------------------------------------------
+environment:
+  python_version: "3.9"
+  pytorch_version: "2.1.0"
+  opencv_version: "4.9.0"
+  cuda_version: "12.0"
+  
+  # 硬件要求
+  gpu:
+    min_memory: 8  # 最小显存 (GB)
+    recommended_memory: 16  # 推荐显存 (GB)
+  cpu:
+    min_cores: 4
+    recommended_cores: 8
+  memory:
+    min_gb: 16
+    recommended_gb: 32
+
+# --------------------------------------------
+# 日志配置
+# --------------------------------------------
+logging:
+  level: "INFO"  # DEBUG/INFO/WARNING/ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "tests/benchmarks/logs/test_{timestamp}.log"
+  console: true
